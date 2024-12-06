@@ -47,10 +47,20 @@ class MultiCrossAttention(nn.Module):
 class PredModel(nn.Module):
     def __init__(self, cfg):
         super(PredModel, self).__init__()
-        self.drug_conv_1 = nn.Linear(100+708, 1024)
+        self.drug_conv_1 = nn.Linear(100+708+4096, 1024)
         self.drug_conv_2 = nn.Linear(1024, 256)
-        self.prot_conv_1 = nn.Linear(400+1493, 1024)
+        self.prot_conv_1 = nn.Linear(400+1493+4096, 1024)
         self.prot_conv_2 = nn.Linear(1024, 256)
+        self.cra_1 = MultiCrossAttention(
+            hidden_size=cfg.hidden_size,
+            all_head_size=cfg.all_head_size,
+            head_num=cfg.head_num
+        )
+        self.cra_2 = MultiCrossAttention(
+            hidden_size=cfg.hidden_size,
+            all_head_size=cfg.all_head_size,
+            head_num=cfg.head_num
+        )
         self.cls_1 = nn.Linear(
             in_features=100+708+400+1493,
             out_features=cfg.hidden_size
@@ -65,6 +75,8 @@ class PredModel(nn.Module):
     def forward(self, features):
         drug_features, prot_features = features
         dt_features = torch.cat((drug_features, prot_features), dim=-1)
+        drug_features = self.cra_1(prot_features, drug_features)
+        prot_features = self.cra_2(drug_features, prot_features)
         pred = self.relu(self.cls_1(dt_features))
         pred = self.cls_2(pred)
         return dt_features, pred
